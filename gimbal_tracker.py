@@ -200,6 +200,7 @@ class GimbalTracker:
             # LOCKED - green crosshair
             cv2.line(frame, (cx - 30, cy), (cx + 30, cy), (0, 255, 0), 3)
             cv2.line(frame, (cx, cy - 30), (cx, cy + 30), (0, 255, 0), 3)
+            cv2.rectangle(frame, (cx - 75, cy - 75), (cx + 75, cy - 45), (0, 0, 0), -1)
             cv2.putText(frame, "LOCKED", (cx - 70, cy - 50), 
                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
         elif self.target_first_seen is not None:
@@ -207,6 +208,7 @@ class GimbalTracker:
             remaining = max(0, self.lock_duration - (time.time() - self.target_first_seen))
             cv2.line(frame, (cx - 30, cy), (cx + 30, cy), (0, 255, 255), 2)
             cv2.line(frame, (cx, cy - 30), (cx, cy + 30), (0, 255, 255), 2)
+            cv2.rectangle(frame, (cx - 110, cy - 75), (cx + 110, cy - 45), (0, 0, 0), -1)
             cv2.putText(frame, f"LOCKING {remaining:.1f}s", (cx - 100, cy - 50), 
                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 3)
         

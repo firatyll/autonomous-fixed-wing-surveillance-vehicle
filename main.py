@@ -11,7 +11,7 @@ from target_locator import TargetLocator
 
 RGB_TOPIC = "/world/runway/model/mini_talon_vtail/link/camera_tilt_link/sensor/camera/image"
 THERMAL_TOPIC = "/thermal_camera"
-WINDOW = "Fire Detection - Fusion"
+WINDOW = "Autonomous Fixed Wing Surveillance Vehicle"
 TH_THRESH = 500.0
 MAX_WIDTH = 1280
 WAYPOINT_INTERVAL = 5.0
@@ -34,6 +34,7 @@ def main():
 
     last_waypoint_time = 0.0
     target_lat, target_lon = None, None
+    roi_lat, roi_lon = None, None
     is_loitering = False
     distance_to_target = None
 
@@ -74,11 +75,12 @@ def main():
                 now = time.time()
                 
                 if distance_to_target < LOITER_DISTANCE and not is_loitering:
+                    roi_lat, roi_lon = target_lat, target_lon
                     telemetry.set_circle_radius(LOITER_RADIUS)
-                    telemetry.set_roi(target_lat, target_lon, 0)
-                    telemetry.send_loiter(target_lat, target_lon, gps['alt'])
+                    telemetry.set_roi(roi_lat, roi_lon, 0)
+                    telemetry.send_loiter(roi_lat, roi_lon, gps['alt'])
                     is_loitering = True
-                    print(f"[NAV] LOITER started at {target_lat:.6f}, {target_lon:.6f} (dist: {distance_to_target:.0f}m)")
+                    print(f"[NAV] LOITER started at {roi_lat:.6f}, {roi_lon:.6f} (dist: {distance_to_target:.0f}m)")
                 
                 elif not is_loitering and now - last_waypoint_time >= WAYPOINT_INTERVAL:
                     telemetry.set_mode("GUIDED")
@@ -149,8 +151,8 @@ def main():
         
         if distance_to_target:
             telem_text += f"  DIST: {distance_to_target:.0f}m"
-        if is_loitering:
-            telem_text += "  [LOITERING]"
+        if is_loitering and roi_lat and roi_lon:
+            telem_text += f"  [LOITERING] ROI: {roi_lat:.5f}, {roi_lon:.5f}"
         
         cv2.putText(telemetry_bar, telem_text, (10, 28),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
