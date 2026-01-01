@@ -8,6 +8,7 @@ import numpy as np
 import time
 from camera_stream import CameraStream
 from telemetry import Telemetry
+from thermal_detector import ThermalDetector
 
 RGB_CAM_TOPIC = "/world/runway/model/mini_talon_vtail/link/base_link/sensor/camera/image"
 THERMAL_CAM_TOPIC = "/thermal_camera"
@@ -16,6 +17,8 @@ MAVLINK_CONNECTION = "udp:127.0.0.1:14550"
 WINDOW_NAME = "Mini Talon Cameras"
 DISPLAY_SCALE = 0.5
 INFO_BAR_HEIGHT = 40
+
+THERMAL_TEMP_THRESHOLD = 500.0
 
 
 def draw_telemetry_bar(frame: np.ndarray, gps: dict) -> np.ndarray:
@@ -43,6 +46,7 @@ def main():
     rgb_camera = CameraStream(topic=RGB_CAM_TOPIC)
     thermal_camera = CameraStream(topic=THERMAL_CAM_TOPIC)
     telemetry = Telemetry(connection_string=MAVLINK_CONNECTION)
+    thermal_detector = ThermalDetector(temp_threshold=THERMAL_TEMP_THRESHOLD)
     
     if not rgb_camera.start():
         print("Failed to subscribe to RGB camera topic!")
@@ -62,13 +66,19 @@ def main():
             gps = telemetry.gps
             
             display_frame = None
+            thermal_display = thermal_frame
             
-            if rgb_frame is not None and thermal_frame is not None:
-                display_frame = np.hstack((rgb_frame, thermal_frame))
+            if thermal_frame is not None:
+                detections = thermal_detector.detect(thermal_frame)
+                if detections:
+                    thermal_display = thermal_detector.draw_detections(thermal_frame, detections)
+            
+            if rgb_frame is not None and thermal_display is not None:
+                display_frame = np.hstack((rgb_frame, thermal_display))
             elif rgb_frame is not None:
                 display_frame = rgb_frame
-            elif thermal_frame is not None:
-                display_frame = thermal_frame
+            elif thermal_display is not None:
+                display_frame = thermal_display
             
             if display_frame is not None:
                 h, w = display_frame.shape[:2]
