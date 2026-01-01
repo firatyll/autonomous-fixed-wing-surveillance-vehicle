@@ -15,6 +15,8 @@ WINDOW = "Fire Detection - Fusion"
 TH_THRESH = 500.0
 MAX_WIDTH = 1280
 WAYPOINT_INTERVAL = 5.0
+LOITER_DISTANCE = 120.0
+LOITER_RADIUS = 80.0
 
 def main():
     rgb_cam = CameraStream(RGB_TOPIC)
@@ -32,6 +34,8 @@ def main():
 
     last_waypoint_time = 0.0
     target_lat, target_lon = None, None
+    is_loitering = False
+    distance_to_target = None
 
     while True:
         rgb_frame = rgb_cam.frame
@@ -65,13 +69,22 @@ def main():
             if target_location:
                 target_lat = target_location.latitude
                 target_lon = target_location.longitude
+                distance_to_target = target_location.distance
                 
                 now = time.time()
-                if now - last_waypoint_time >= WAYPOINT_INTERVAL:
+                
+                if distance_to_target < LOITER_DISTANCE and not is_loitering:
+                    telemetry.set_circle_radius(LOITER_RADIUS)
+                    telemetry.set_roi(target_lat, target_lon, 0)
+                    telemetry.send_loiter(target_lat, target_lon, gps['alt'])
+                    is_loitering = True
+                    print(f"[NAV] LOITER started at {target_lat:.6f}, {target_lon:.6f} (dist: {distance_to_target:.0f}m)")
+                
+                elif not is_loitering and now - last_waypoint_time >= WAYPOINT_INTERVAL:
                     telemetry.set_mode("GUIDED")
                     telemetry.send_waypoint(target_lat, target_lon, gps['alt'])
                     last_waypoint_time = now
-                    print(f"[NAV] Waypoint sent: {target_lat:.6f}, {target_lon:.6f}")
+                    print(f"[NAV] Waypoint sent: {target_lat:.6f}, {target_lon:.6f} (dist: {distance_to_target:.0f}m)")
 
         th_display = th_frame.copy()
         if len(th_display.shape) == 2:
@@ -112,7 +125,10 @@ def main():
             cv2.addWeighted(overlay, 0.6, combined, 0.4, 0, combined)
             
             best = max(fused, key=lambda d: d.confidence)
-            text = f"FIRE DETECTED - {best.thermal_temp:.0f}C"
+            if is_loitering:
+                text = f"LOITERING - {best.thermal_temp:.0f}C"
+            else:
+                text = f"FIRE DETECTED - {best.thermal_temp:.0f}C"
             text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)[0]
             text_x = (w - text_size[0]) // 2
             cv2.putText(combined, text, (text_x, 40), 
@@ -129,10 +145,12 @@ def main():
         telemetry_bar[:] = (40, 40, 40)
         
         gps = telemetry.gps
-        telem_text = f"LAT: {gps['lat']:.6f}  LON: {gps['lon']:.6f}  ALT: {gps['alt']:.1f}m  GS: {gps['groundspeed']:.1f}m/s  HDG: {gps['heading']:.0f}"
+        telem_text = f"LAT: {gps['lat']:.6f}  LON: {gps['lon']:.6f}  ALT: {gps['alt']:.1f}m  GS: {gps['groundspeed']:.1f}m/s"
         
-        if target_lat and target_lon:
-            telem_text += f"  | TARGET WAYPOINT: {target_lat:.5f}, {target_lon:.5f}"
+        if distance_to_target:
+            telem_text += f"  DIST: {distance_to_target:.0f}m"
+        if is_loitering:
+            telem_text += "  [LOITERING]"
         
         cv2.putText(telemetry_bar, telem_text, (10, 28),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
