@@ -29,6 +29,11 @@ class Telemetry:
         self._lock = threading.Lock()
     
     @property
+    def connection(self):
+        """Returns the MAVLink connection object."""
+        return self._mav
+    
+    @property
     def gps(self) -> Dict[str, Any]:
         """Returns the latest GPS data (thread-safe)."""
         with self._lock:

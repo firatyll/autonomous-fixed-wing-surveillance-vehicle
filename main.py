@@ -1,9 +1,3 @@
-"""
-Main Application
-Mini Talon VTAIL Camera Viewer - RGB + Thermal Side by Side with GPS Telemetry
-Fire Detection with Sensor Fusion + Gimbal Tracking
-"""
-
 import cv2
 import numpy as np
 import time
@@ -13,121 +7,123 @@ from thermal_detector import ThermalDetector
 from fire_detector import FireDetector
 from sensor_fusion import SensorFusion
 from gimbal_tracker import GimbalTracker
+from target_locator import localize_from_telemetry
+from navigation_utils import set_mode, send_waypoint, set_roi, set_circle_radius, send_loiter, set_speed
 
-RGB_CAM_TOPIC = "/world/runway/model/mini_talon_vtail/link/camera_tilt_link/sensor/camera/image"
-THERMAL_CAM_TOPIC = "/thermal_camera"
-MAVLINK_CONNECTION = "udp:127.0.0.1:14550"
+RGB_TOPIC = "/world/runway/model/mini_talon_vtail/link/camera_tilt_link/sensor/camera/image"
+THERMAL_TOPIC = "/thermal_camera"
+MAV_CONN = "udp:127.0.0.1:14550"
+WINDOW = "Mini Talon"
+INFO_BAR_H = 80
+TH_THRESH = 500.0
 
-WINDOW_NAME = "Mini Talon Cameras"
-DISPLAY_SCALE = 0.5
-INFO_BAR_HEIGHT = 40
+ALT = 70.0
+SPEED_APP = 13.0
+SPEED_ORB = 10.0
+DIST_ORB = 130.0
+RAD_ORB = 85.0
 
-THERMAL_TEMP_THRESHOLD = 500.0
-
-
-def draw_telemetry_bar(frame: np.ndarray, gps: dict) -> np.ndarray:
+def draw_ui(frame, gps, target, center, finished, mode):
     h, w = frame.shape[:2]
+    bar = np.zeros((INFO_BAR_H, w, 3), dtype=np.uint8) + 40
     
-    info_bar = np.zeros((INFO_BAR_HEIGHT, w, 3), dtype=np.uint8)
-    info_bar[:] = (40, 40, 40)
+    uav_txt = f"UAV  | LAT: {gps['lat']:.6f}  LON: {gps['lon']:.6f}  ALT: {gps['alt']:.1f}m  HDG: {gps['heading']:.0f}  MODE: {mode}"
+    cv2.putText(bar, uav_txt, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
     
-    text = (
-        f"LAT: {gps['lat']:.6f}  "
-        f"LON: {gps['lon']:.6f}  "
-        f"ALT: {gps['alt']:.1f}m  "
-        f"HDG: {gps['heading']:.0f}°  "
-        f"GS: {gps['groundspeed']:.1f}m/s  "
-        f"SAT: {gps['satellites']} (Fix:{gps['fix_type']})"
-    )
-    
-    cv2.putText(info_bar, text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-    
-    return np.vstack((frame, info_bar))
+    if target:
+        c = (0, 255, 0) if center else (0, 0, 255)
+        st = "[FINISHED]" if finished else ("[CENTERED]" if center else "[TRACKING]")
+        fire_txt = f"FIRE | LAT: {target.latitude:.6f}  LON: {target.longitude:.6f}  DIST: {target.distance:.0f}m  BRG: {target.bearing:.0f} {st}"
+        cv2.putText(bar, fire_txt, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 1)
+    else:
 
+    status_msg = "MISSION COMPLETE: ORBITING TARGET" if finished else ("AUTONOMOUS APPROACH ACTIVE" if mode == "GUIDED" else "WAITING FOR LOCK...")
+    status_color = (0, 255, 0) if finished else ((0, 255, 255) if mode == "GUIDED" else (200, 200, 200))
+    cv2.putText(bar, f"STATUS: {status_msg}", (10, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+    
+    return np.vstack((frame, bar))
 
 def main():
-    rgb_camera = CameraStream(topic=RGB_CAM_TOPIC)
-    thermal_camera = CameraStream(topic=THERMAL_CAM_TOPIC)
-    telemetry = Telemetry(connection_string=MAVLINK_CONNECTION)
-    thermal_detector = ThermalDetector(temp_threshold=THERMAL_TEMP_THRESHOLD)
-    fire_detector = FireDetector()
-    sensor_fusion = SensorFusion(position_threshold=0.15)
-    gimbal_tracker = GimbalTracker()
+    rgb_cam = CameraStream(RGB_TOPIC)
+    th_cam = CameraStream(THERMAL_TOPIC)
+    mav = Telemetry(MAV_CONN)
+    th_det = ThermalDetector(TH_THRESH)
+    rgb_det = FireDetector()
+    fusion = SensorFusion(0.15)
+    tracker = GimbalTracker()
     
-    if not rgb_camera.start():
-        print("Failed to subscribe to RGB camera topic!")
-        return
+    if not (rgb_cam.start() and th_cam.start() and mav.start()): return
     
-    if not thermal_camera.start():
-        print("Failed to subscribe to thermal camera topic!")
-        return
-    
-    if not telemetry.start():
-        print("Warning: Telemetry not available, continuing without GPS...")
+    orbiting = False
+    autonomous = False
+    target_loc = None
+    first_lock = False
+    last_upd = 0
     
     try:
         while True:
-            rgb_frame = rgb_camera.frame
-            thermal_frame = thermal_camera.frame
-            gps = telemetry.gps
-            
-            rgb_display = rgb_frame
-            thermal_display = thermal_frame
-            fire_detections = []
-            thermal_detections = []
-            confirmed_rgb_indices = []
-            
-            if rgb_frame is not None:
-                fire_detections = fire_detector.detect(rgb_frame)
-            
-            if thermal_frame is not None:
-                thermal_detections = thermal_detector.detect(thermal_frame)
-                if thermal_detections:
-                    thermal_display = thermal_detector.draw_detections(thermal_frame, thermal_detections)
-            
-            fused_detections = []
-            if rgb_frame is not None and thermal_frame is not None:
-                fused_detections, confirmed_rgb_indices = sensor_fusion.fuse(
-                    fire_detections,
-                    thermal_detections,
-                    (rgb_frame.shape[1], rgb_frame.shape[0]),
-                    (thermal_frame.shape[1], thermal_frame.shape[0])
-                )
-            
-            if fire_detections:
-                rgb_display = fire_detector.draw_detections(rgb_frame, fire_detections, confirmed_rgb_indices)
-            
-            if rgb_frame is not None:
-                gimbal_tracker.update(fused_detections, (rgb_frame.shape[0], rgb_frame.shape[1]))
-            
-            if rgb_display is not None:
-                rgb_display = gimbal_tracker.draw_overlay(rgb_display)
-            
-            display_frame = None
-            if rgb_display is not None and thermal_display is not None:
-                display_frame = np.hstack((rgb_display, thermal_display))
-            elif rgb_display is not None:
-                display_frame = rgb_display
-            elif thermal_display is not None:
-                display_frame = thermal_display
-            
-            if display_frame is not None:
-                h, w = display_frame.shape[:2]
-                display_frame = cv2.resize(display_frame, (int(w * DISPLAY_SCALE), int(h * DISPLAY_SCALE)))
-                
-                if fused_detections:
-                    display_frame = sensor_fusion.draw_warning(display_frame, fused_detections)
-                
-                display_frame = draw_telemetry_bar(display_frame, gps)
-                cv2.imshow(WINDOW_NAME, display_frame)
-            
-            cv2.waitKey(1)
-            time.sleep(0.001)
-    except KeyboardInterrupt:
-        rgb_camera.stop()
-        thermal_camera.stop()
-        telemetry.stop()
+            rgb, th, gps = rgb_cam.frame, th_cam.frame, mav.gps
+            if rgb is None or th is None: continue
 
+            rgb_d = rgb_det.detect(rgb)
+            th_d = th_det.detect(th)
+            fused, conf_indices = fusion.fuse(rgb_d, th_d, rgb.shape[:2][::-1], th.shape[:2][::-1])
+            
+            tracker.update(fused, rgb.shape[:2])
+            
+            conn = mav.connection
+            if not orbiting and conn:
+                now = time.time()
+                update = (tracker.is_centered and fused and not first_lock) or \
+                         (first_lock and fused and (now - last_upd) >= 5.0)
+                
+                if update:
+                    best = max(fused, key=lambda d: d.confidence)
+                    loc = localize_from_telemetry(gps, tracker.current_pan, tracker.current_tilt, best.rgb_center)
+                    
+                    if loc:
+                        target_loc = loc
+                        last_upd = now
+                        
+                        if not first_lock:
+                            first_lock = True
+                            set_speed(conn, SPEED_APP)
+                            set_mode(conn, "GUIDED")
+                            autonomous = True
+                        
+                        if autonomous:
+                            send_waypoint(conn, loc.latitude, loc.longitude, ALT)
+                        
+                        if loc.distance < DIST_ORB:
+                            set_speed(conn, SPEED_ORB)
+                            set_roi(conn, loc.latitude, loc.longitude, 0)
+                            set_circle_radius(conn, RAD_ORB)
+                            send_loiter(conn, loc.latitude, loc.longitude, ALT)
+                            orbiting = True
+
+            th_vis = th.copy()
+            if th_d:
+                th_vis = th_det.draw_detections(th_vis, th_d)
+
+            rgb_vis = rgb.copy()
+            if rgb_d:
+                rgb_vis = rgb_det.draw_detections(rgb_vis, rgb_d, conf_indices)
+            
+            rgb_vis = tracker.draw_overlay(rgb_vis)
+
+            disp = np.hstack((rgb_vis, th_vis))
+            disp = cv2.resize(disp, (0, 0), fx=0.5, fy=0.5)
+            
+            if fused:
+                disp = fusion.draw_warning(disp, fused)
+
+            cv2.imshow(WINDOW, draw_ui(disp, gps, target_loc, tracker.is_centered, orbiting, "AUTO" if autonomous else "MAN"))
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+            time.sleep(0.001)
+
+    finally:
+        rgb_cam.stop(); th_cam.stop(); mav.stop()
 
 if __name__ == "__main__":
     main()

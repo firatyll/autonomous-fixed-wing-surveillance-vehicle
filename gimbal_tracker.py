@@ -61,6 +61,11 @@ class GimbalTracker:
         self.is_pitch_centered = False
         self.frame_count = 0
     
+    @property
+    def is_centered(self) -> bool:
+        """Returns True when target is centered (both axes in deadband)."""
+        return self.is_locked and self.is_yaw_centered and self.is_pitch_centered
+    
     def update(self, fused_detections: list, frame_shape: Tuple[int, int]) -> None:
         """
         Update gimbal tracking based on fused fire detections.
@@ -195,16 +200,16 @@ class GimbalTracker:
         
         if self.is_locked:
             # LOCKED - green crosshair
-            cv2.line(frame, (cx - 30, cy), (cx + 30, cy), (0, 255, 0), 2)
-            cv2.line(frame, (cx, cy - 30), (cx, cy + 30), (0, 255, 0), 2)
-            cv2.putText(frame, "LOCKED", (cx - 50, cy - 40), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.line(frame, (cx - 30, cy), (cx + 30, cy), (0, 255, 0), 3)
+            cv2.line(frame, (cx, cy - 30), (cx, cy + 30), (0, 255, 0), 3)
+            cv2.putText(frame, "LOCKED", (cx - 70, cy - 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
         elif self.target_first_seen is not None:
-            # LOCKING - yellow crosshair (waiting for 3 seconds)
+            # LOCKING - yellow crosshair
             remaining = max(0, self.lock_duration - (time.time() - self.target_first_seen))
             cv2.line(frame, (cx - 30, cy), (cx + 30, cy), (0, 255, 255), 2)
             cv2.line(frame, (cx, cy - 30), (cx, cy + 30), (0, 255, 255), 2)
-            cv2.putText(frame, f"LOCKING... {remaining:.1f}s", (cx - 80, cy - 40), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.putText(frame, f"LOCKING {remaining:.1f}s", (cx - 100, cy - 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 3)
         
         return frame
