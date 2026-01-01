@@ -1,6 +1,7 @@
 """
 Main Application
 Mini Talon VTAIL Camera Viewer - RGB + Thermal Side by Side with GPS Telemetry
+Fire Detection on both RGB (color) and Thermal (temperature)
 """
 
 import cv2
@@ -9,6 +10,7 @@ import time
 from camera_stream import CameraStream
 from telemetry import Telemetry
 from thermal_detector import ThermalDetector
+from fire_detector import FireDetector
 
 RGB_CAM_TOPIC = "/world/runway/model/mini_talon_vtail/link/base_link/sensor/camera/image"
 THERMAL_CAM_TOPIC = "/thermal_camera"
@@ -47,6 +49,7 @@ def main():
     thermal_camera = CameraStream(topic=THERMAL_CAM_TOPIC)
     telemetry = Telemetry(connection_string=MAVLINK_CONNECTION)
     thermal_detector = ThermalDetector(temp_threshold=THERMAL_TEMP_THRESHOLD)
+    fire_detector = FireDetector()
     
     if not rgb_camera.start():
         print("Failed to subscribe to RGB camera topic!")
@@ -65,18 +68,24 @@ def main():
             thermal_frame = thermal_camera.frame
             gps = telemetry.gps
             
-            display_frame = None
+            rgb_display = rgb_frame
             thermal_display = thermal_frame
             
-            if thermal_frame is not None:
-                detections = thermal_detector.detect(thermal_frame)
-                if detections:
-                    thermal_display = thermal_detector.draw_detections(thermal_frame, detections)
+            if rgb_frame is not None:
+                fire_detections = fire_detector.detect(rgb_frame)
+                if fire_detections:
+                    rgb_display = fire_detector.draw_detections(rgb_frame, fire_detections)
             
-            if rgb_frame is not None and thermal_display is not None:
-                display_frame = np.hstack((rgb_frame, thermal_display))
-            elif rgb_frame is not None:
-                display_frame = rgb_frame
+            if thermal_frame is not None:
+                thermal_detections = thermal_detector.detect(thermal_frame)
+                if thermal_detections:
+                    thermal_display = thermal_detector.draw_detections(thermal_frame, thermal_detections)
+            
+            display_frame = None
+            if rgb_display is not None and thermal_display is not None:
+                display_frame = np.hstack((rgb_display, thermal_display))
+            elif rgb_display is not None:
+                display_frame = rgb_display
             elif thermal_display is not None:
                 display_frame = thermal_display
             
