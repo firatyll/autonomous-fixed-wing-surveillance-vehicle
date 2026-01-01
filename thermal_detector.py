@@ -23,7 +23,7 @@ class ThermalDetection:
 class ThermalDetector:
     """Detects high temperature regions in thermal images."""
     
-    def __init__(self, temp_threshold: float = 500.0, min_area: int = 100):
+    def __init__(self, temp_threshold: float = 500.0, min_area: int = 10):
         self._temp_threshold = temp_threshold
         self._min_area = min_area
         
