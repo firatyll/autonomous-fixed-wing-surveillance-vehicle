@@ -64,12 +64,7 @@ def main():
             display_frame = None
             
             if rgb_frame is not None and thermal_frame is not None:
-                rgb_h = rgb_frame.shape[0]
-                thermal_h, thermal_w = thermal_frame.shape[:2]
-                scale = rgb_h / thermal_h
-                thermal_resized = cv2.resize(thermal_frame, (int(thermal_w * scale), rgb_h))
-                
-                display_frame = np.hstack((rgb_frame, thermal_resized))
+                display_frame = np.hstack((rgb_frame, thermal_frame))
             elif rgb_frame is not None:
                 display_frame = rgb_frame
             elif thermal_frame is not None:
