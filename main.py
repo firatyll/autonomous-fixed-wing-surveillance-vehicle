@@ -1,7 +1,7 @@
 """
 Main Application
 Mini Talon VTAIL Camera Viewer - RGB + Thermal Side by Side with GPS Telemetry
-Fire Detection with Sensor Fusion
+Fire Detection with Sensor Fusion + Gimbal Tracking
 """
 
 import cv2
@@ -12,8 +12,9 @@ from telemetry import Telemetry
 from thermal_detector import ThermalDetector
 from fire_detector import FireDetector
 from sensor_fusion import SensorFusion
+from gimbal_tracker import GimbalTracker
 
-RGB_CAM_TOPIC = "/world/runway/model/mini_talon_vtail/link/base_link/sensor/camera/image"
+RGB_CAM_TOPIC = "/world/runway/model/mini_talon_vtail/link/camera_tilt_link/sensor/camera/image"
 THERMAL_CAM_TOPIC = "/thermal_camera"
 MAVLINK_CONNECTION = "udp:127.0.0.1:14550"
 
@@ -51,6 +52,7 @@ def main():
     thermal_detector = ThermalDetector(temp_threshold=THERMAL_TEMP_THRESHOLD)
     fire_detector = FireDetector()
     sensor_fusion = SensorFusion(position_threshold=0.15)
+    gimbal_tracker = GimbalTracker()
     
     if not rgb_camera.start():
         print("Failed to subscribe to RGB camera topic!")
@@ -94,6 +96,12 @@ def main():
             
             if fire_detections:
                 rgb_display = fire_detector.draw_detections(rgb_frame, fire_detections, confirmed_rgb_indices)
+            
+            if rgb_frame is not None:
+                gimbal_tracker.update(fused_detections, (rgb_frame.shape[0], rgb_frame.shape[1]))
+            
+            if rgb_display is not None:
+                rgb_display = gimbal_tracker.draw_overlay(rgb_display)
             
             display_frame = None
             if rgb_display is not None and thermal_display is not None:
