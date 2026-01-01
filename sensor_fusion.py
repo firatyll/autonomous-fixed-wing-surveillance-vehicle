@@ -1,8 +1,3 @@
-"""
-Sensor Fusion Module
-Combines RGB and Thermal detections to confirm fire presence.
-"""
-
 import cv2
 import numpy as np
 from typing import List, Tuple, Optional
@@ -21,13 +16,8 @@ class FusedDetection:
 
 
 class SensorFusion:
-    """Fuses RGB and Thermal detections based on position overlap."""
-    
     def __init__(self, position_threshold: float = 0.15):
-        """
-        Args:
-            position_threshold: Max allowed difference in normalized position (0-1)
-        """
+
         self._position_threshold = position_threshold
         self._confirmed_fire = False
     
@@ -40,13 +30,7 @@ class SensorFusion:
              thermal_detections: List,
              rgb_frame_size: Tuple[int, int],
              thermal_frame_size: Tuple[int, int]) -> Tuple[List[FusedDetection], List[int]]:
-        """
-        Compare RGB and Thermal detections using greedy best-match strategy.
-        Ensures one-to-one mapping based on highest confidence (closest distance).
-        
-        Returns:
-            Tuple of (fused_detections, confirmed_rgb_indices)
-        """
+
         fused = []
         confirmed_rgb_indices = []
         
@@ -57,7 +41,6 @@ class SensorFusion:
         rgb_w, rgb_h = rgb_frame_size
         thermal_w, thermal_h = thermal_frame_size
         
-        # 1. Collect all potential matches
         potential_matches = []
         
         for i, rgb_det in enumerate(rgb_detections):

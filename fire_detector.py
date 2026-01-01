@@ -1,8 +1,3 @@
-"""
-Fire Detection Module
-Detects fire/flame colored objects using HSV color filtering.
-"""
-
 import cv2
 import numpy as np
 from typing import List, Tuple, Optional
@@ -30,15 +25,7 @@ class FireDetector:
         self._upper_hsv = np.array([25, 255, 255])
     
     def detect(self, frame: np.ndarray) -> List[FireDetection]:
-        """
-        Detect fire-colored regions in RGB frame.
-        
-        Args:
-            frame: BGR image from camera
-            
-        Returns:
-            List of FireDetection objects
-        """
+
         if frame is None:
             return []
         

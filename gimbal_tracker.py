@@ -1,8 +1,3 @@
-"""
-Gimbal Tracker Module
-Tracks confirmed fire targets and controls gimbal pan/tilt to center them.
-"""
-
 import time
 import subprocess
 from typing import Tuple, Optional
@@ -37,17 +32,17 @@ class GimbalTracker:
         
         # P-controller gains
         self.pan_kp = 0.05
-        self.tilt_kp = 0.05
+        self.tilt_kp = 0.02
         
-        # Dead zones (smaller = tighter tracking)
-        self.pan_dead_zone = 0.03      # 3% - very tight
-        self.pan_unlock_zone = 0.05    # 5% - slight hysteresis
-        self.tilt_dead_zone = 0.03
-        self.tilt_unlock_zone = 0.05
+        # Dead zones
+        self.pan_dead_zone = 0.03
+        self.pan_unlock_zone = 0.05
+        self.tilt_dead_zone = 0.08
+        self.tilt_unlock_zone = 0.12
         
-        # Fine-tune threshold (always fine-tune if above 1%)
+        # Fine-tune threshold
         self.fine_tune_threshold = 0.01
-        self.fine_tune_gain = 0.3  # Slightly stronger fine-tune
+        self.fine_tune_gain = 0.3
         
         # Lock timer
         self.lock_duration = lock_duration
@@ -66,6 +61,16 @@ class GimbalTracker:
         """Returns True when target is centered (both axes in deadband)."""
         return self.is_locked and self.is_yaw_centered and self.is_pitch_centered
     
+    @property
+    def pan(self) -> float:
+        """Current pan angle in radians."""
+        return self.current_pan
+    
+    @property
+    def tilt(self) -> float:
+        """Current tilt angle in radians."""
+        return self.current_tilt
+    
     def update(self, fused_detections: list, frame_shape: Tuple[int, int]) -> None:
         """
         Update gimbal tracking based on fused fire detections.
@@ -77,8 +82,8 @@ class GimbalTracker:
         """
         self.frame_count += 1
         
-        # Only process every 5 frames
-        if self.frame_count % 5 != 0:
+        # Only process every 3 frames
+        if self.frame_count % 3 != 0:
             return
         
         if fused_detections:
@@ -160,14 +165,7 @@ class GimbalTracker:
                 self.is_pitch_centered = True
         
         if not self.is_pitch_centered:
-            # Normal correction
             new_tilt = self.current_tilt + (error_y * self.tilt_kp)
-            new_tilt = max(self.tilt_up, min(self.tilt_down, new_tilt))
-            self.current_tilt = round(new_tilt, 3)
-            self._send_command(self.tilt_topic, self.current_tilt)
-        elif abs(error_y) > self.fine_tune_threshold:
-            # Fine-tune within deadband
-            new_tilt = self.current_tilt + (error_y * self.tilt_kp * self.fine_tune_gain)
             new_tilt = max(self.tilt_up, min(self.tilt_down, new_tilt))
             self.current_tilt = round(new_tilt, 3)
             self._send_command(self.tilt_topic, self.current_tilt)

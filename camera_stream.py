@@ -1,9 +1,3 @@
-"""
-Camera Stream Module
-Handles Gazebo camera subscription and frame processing.
-Camera: 1280x720 @ 30fps
-"""
-
 import cv2
 import numpy as np
 from gz.msgs10.image_pb2 import Image

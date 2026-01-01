@@ -1,8 +1,3 @@
-"""
-Thermal Detection Module
-Detects high temperature regions in thermal camera feed.
-"""
-
 import cv2
 import numpy as np
 from typing import List, Tuple, Optional
@@ -40,15 +35,7 @@ class ThermalDetector:
         return int(np.clip(normalized * 255, 0, 255))
     
     def detect(self, thermal_frame: np.ndarray) -> List[ThermalDetection]:
-        """
-        Detect hot regions above threshold temperature.
-        
-        Args:
-            thermal_frame: Grayscale thermal image (0-255)
-            
-        Returns:
-            List of ThermalDetection objects
-        """
+
         if thermal_frame is None:
             return []
         
