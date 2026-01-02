@@ -65,6 +65,7 @@ This projects a point from the aircraft's position along the calculated bearing 
 
 ## Dependencies
 
+- Ardupilot
 - OpenCV (cv2)
 - NumPy
 - PyMAVLink
